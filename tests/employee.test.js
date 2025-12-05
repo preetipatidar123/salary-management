@@ -28,7 +28,7 @@ describe("Employee API Tests", () => {
       });
     
     expect(res.statusCode).toBe(201);
-    expect(res.body.fullName).toBe("Undefined");
+    expect(res.body.fullName).toBe("John Doe");
     employeeId = res.body.id;
   });
 
