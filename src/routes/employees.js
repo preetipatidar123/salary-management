@@ -1,22 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const ctrl = require('../controllers/employeeController');
+const employeeController = require('../controllers/employeeController');
+const { validateEmployee, validateEmployeeUpdate, validateSalaryQuery, validateId } = require('../middleware/validation');
 
+// Metrics routes (must come before /:id routes to avoid conflicts)
+router.get('/metrics/country/:country', employeeController.metricsByCountry);
+router.get('/metrics/job-title/:jobTitle', employeeController.avgByJobTitle);
 
-router.get('/metrics/country/:country', ctrl.metricsByCountry);
-router.get('/metrics/job-title/:jobTitle', ctrl.avgByJobTitle);
+// Salary report routes
+router.get('/country/:country', employeeController.getSalaryByCountry);
+router.get('/job/:jobTitle', employeeController.getSalaryByJobTitle);
 
-router.get('/country/:country', ctrl.getSalaryByCountry);
-router.get('/job/:jobTitle', ctrl.getSalaryByJobTitle);
+// CRUD routes
+router.post('/', validateEmployee, employeeController.createEmployee);
+router.get('/', employeeController.getEmployees);
+router.get('/:id', validateId, employeeController.getEmployee);
+router.put('/:id', validateId, validateEmployeeUpdate, employeeController.updateEmployee);
+router.delete('/:id', validateId, employeeController.deleteEmployee);
 
-
-router.post('/', ctrl.createEmployee);
-router.get('/', ctrl.getEmployees);
-router.get('/:id', ctrl.getEmployee);
-router.put('/:id', ctrl.updateEmployee);
-router.delete('/:id', ctrl.deleteEmployee);
-
-
-router.get('/:id/salary', ctrl.salaryCalculation);
+// Salary calculation route (must come after /:id route)
+router.get('/:id/salary', validateId, validateSalaryQuery, employeeController.salaryCalculation);
 
 module.exports = router;

@@ -1,175 +1,95 @@
-const prisma = require('../../prismaClient');
-const { calculateDeductions } = require('../utils/salaryUtils'); // ← missing import fixed
+const asyncHandler = require('../middleware/asyncHandler');
+const employeeService = require('../services/employeeService');
 
-// CREATE employee
-async function createEmployee(req, res) {
-  const { fullName, jobTitle, country, salary } = req.body;
-
-  if (!fullName || !jobTitle || !country || salary == null) {
-    return res.status(400).json({ error: 'fullName, jobTitle, country, salary are required' });
-  }
-
-  const employee = await prisma.employee.create({
-    data: { fullName, jobTitle, country, salary: Number(salary) }
-  });
-
+/**
+ * CREATE employee
+ */
+const createEmployee = asyncHandler(async (req, res) => {
+  const employee = await employeeService.createEmployee(req.body);
   res.status(201).json(employee);
-}
+});
 
-// GET all employees
-async function getEmployees(req, res) {
-  const employees = await prisma.employee.findMany();
+/**
+ * GET all employees
+ */
+const getEmployees = asyncHandler(async (req, res) => {
+  const employees = await employeeService.getAll();
   res.json(employees);
-}
+});
 
-async function getEmployee(req, res) {
-  const id = Number(req.params.id);
-  const emp = await prisma.employee.findUnique({ where: { id } });
-  if (!emp) return res.status(404).json({ error: 'Employee not found' });
-  res.json(emp);
-}
+/**
+ * GET employee by ID
+ */
+const getEmployee = asyncHandler(async (req, res) => {
+  const employee = await employeeService.getById(req.params.id);
+  res.json(employee);
+});
 
-async function updateEmployee(req, res) {
-  const id = Number(req.params.id);
-  const { fullName, jobTitle, country, salary } = req.body;
+/**
+ * UPDATE employee
+ */
+const updateEmployee = asyncHandler(async (req, res) => {
+  const employee = await employeeService.updateEmployee(req.params.id, req.body);
+  res.json(employee);
+});
 
-  try {
-    const emp = await prisma.employee.update({
-      where: { id },
-      data: { fullName, jobTitle, country, salary: salary == null ? undefined : Number(salary) }
-    });
-    res.json(emp);
-  } catch (err) {
-    res.status(404).json({ error: 'Employee not found' });
-  }
-}
+/**
+ * DELETE employee
+ */
+const deleteEmployee = asyncHandler(async (req, res) => {
+  await employeeService.deleteEmployee(req.params.id);
+  res.status(204).end();
+});
 
-async function deleteEmployee(req, res) {
-  const id = Number(req.params.id);
+/**
+ * Calculate salary deductions
+ */
+const salaryCalculation = asyncHandler(async (req, res) => {
+  const result = await employeeService.calculateSalary(req.params.id, req.gross);
+  res.json(result);
+});
 
-  try {
-    await prisma.employee.delete({ where: { id } });
-    res.status(204).end();
-  } catch {
-    res.status(404).json({ error: 'Employee not found' });
-  }
-}
+/**
+ * Get metrics by country
+ */
+const metricsByCountry = asyncHandler(async (req, res) => {
+  const result = await employeeService.getMetricsByCountry(req.params.country);
+  res.json(result);
+});
 
-// Salary calculation endpoint: GET /employees/:id/salary?gross=12345
-async function salaryCalculation(req, res) {
-  const id = Number(req.params.id);
-  const grossQ = req.query.gross;
+/**
+ * Get average salary by job title
+ */
+const avgByJobTitle = asyncHandler(async (req, res) => {
+  const result = await employeeService.getAverageByJobTitle(req.params.jobTitle);
+  res.json(result);
+});
 
-  if (!grossQ) return res.status(400).json({ error: 'gross query parameter required' });
+/**
+ * Get salary report by country
+ */
+const getSalaryByCountry = asyncHandler(async (req, res) => {
+  const result = await employeeService.getSalaryReportByCountry(req.params.country);
+  res.json(result);
+});
 
-  const gross = Number(grossQ);
-  if (Number.isNaN(gross) || gross < 0) {
-    return res.status(400).json({ error: 'gross must be a non-negative number' });
-  }
-
-  const emp = await prisma.employee.findUnique({ where: { id } });
-  if (!emp) return res.status(404).json({ error: 'Employee not found' });
-
-  const { tds, net } = calculateDeductions(gross, emp.country);
-  res.json({ employeeId: id, country: emp.country, gross, tds, net });
-}
-
-// Metrics by country
-async function metricsByCountry(req, res) {
-  const country = req.params.country;
-  const emps = await prisma.employee.findMany({ where: { country } });
-
-  if (!emps.length) return res.status(404).json({ error: 'No employees found for this country' });
-
-  const salaries = emps.map(e => e.salary);
-  const min = Math.min(...salaries);
-  const max = Math.max(...salaries);
-  const avg = salaries.reduce((a, b) => a + b, 0) / salaries.length;
-
-  res.json({ country, min, max, avg });
-}
-
-// Average salary by job title
-async function avgByJobTitle(req, res) {
-  const jobTitle = req.params.jobTitle;
-  const emps = await prisma.employee.findMany({ where: { jobTitle } });
-
-  if (!emps.length) return res.status(404).json({ error: 'No employees found for this job title' });
-
-  const avg = emps.reduce((a, b) => a + b.salary, 0) / emps.length;
-  res.json({ jobTitle, avg });
-}
-
-
-// Get salary report by country
-async function getSalaryByCountry(req, res)  {
-  try {
-    const { country } = req.params;
-
-    const salaries = await prisma.employee.findMany({
-      where: { country },
-      select: { salary: true }
-    });
-
-    if (salaries.length === 0) {
-      return res.status(404).json({ message: "No employees found for this country" });
-    }
-
-    const values = salaries.map(s => s.salary);
-
-    const response = {
-      country,
-      minSalary: Math.min(...values),
-      maxSalary: Math.max(...values),
-      avgSalary: values.reduce((a, b) => a + b, 0) / values.length
-    };
-
-    return res.json(response);
-
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-// Get salary report by job title
-async function getSalaryByJobTitle(req, res) {
-  try {
-    const { jobTitle } = req.params;
-
-    const employees = await prisma.employee.findMany({
-      where: { jobTitle },
-      select: { salary: true }
-    });
-
-    if (employees.length === 0) {
-      return res.status(404).json({ message: "No employees found for this job title" });
-    }
-
-    const avgSalary = employees.reduce((sum, emp) => sum + emp.salary, 0) / employees.length;
-
-    return res.json({
-      jobTitle,
-      employeeCount: employees.length,
-      averageSalary: avgSalary
-    });
-
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
+/**
+ * Get salary report by job title
+ */
+const getSalaryByJobTitle = asyncHandler(async (req, res) => {
+  const result = await employeeService.getSalaryReportByJobTitle(req.params.jobTitle);
+  res.json(result);
+});
 
 module.exports = {
-    createEmployee,
-    getEmployees,
-    getEmployee,
-    updateEmployee,
-    deleteEmployee,
-    salaryCalculation,
-    metricsByCountry,
-    avgByJobTitle,
-    getSalaryByCountry,
-    getSalaryByJobTitle
-  };
-  
+  createEmployee,
+  getEmployees,
+  getEmployee,
+  updateEmployee,
+  deleteEmployee,
+  salaryCalculation,
+  metricsByCountry,
+  avgByJobTitle,
+  getSalaryByCountry,
+  getSalaryByJobTitle
+};

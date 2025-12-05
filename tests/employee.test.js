@@ -1,7 +1,7 @@
 const request = require("supertest");
 const app = require("../index");
 
-const prisma = require("../prismaClient");
+const prisma = require("../src/config/database");
 
 beforeAll(async () => {
   await prisma.$connect();
